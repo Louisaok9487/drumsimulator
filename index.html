@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Drum Machine (Remix Style)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Tone.js CDN for Web Audio API functionalities -->
+    <script src="https://unpkg.com/tone@14.7.77/build/Tone.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #2d3748, #1a202c); /* Darker, more electronic gradient */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 20px;
+            overflow: hidden; /* Prevent scroll on some mobile layouts */
+            color: #e2e8f0; /* Light text for dark background */
+        }
+
+        .drum-kit-container {
+            background-color: rgba(45, 55, 72, 0.9); /* Darker container */
+            border-radius: 20px;
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.5); /* Stronger shadow */
+            padding: 30px;
+            max-width: 800px;
+            width: 95%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            border: 2px solid rgba(107, 114, 128, 0.5); /* Grey border */
+        }
+
+        h1 {
+            font-size: 3.5rem; /* Larger title */
+            font-weight: 800; /* Extra bold */
+            color: #81e6d9; /* Teal for title */
+            text-shadow: 3px 3px 6px rgba(0, 0, 0, 0.3);
+            margin-bottom: 20px;
+            letter-spacing: -1px;
+        }
+
+        .instructions {
+            font-size: 1.2rem;
+            color: #a78bfa; /* Light purple */
+            margin-bottom: 30px;
+            text-align: center;
+            font-weight: 600;
+        }
+
+        .drum-pads-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr); /* 3 columns by default */
+            gap: 20px; /* Space between pads */
+            width: 100%;
+            max-width: 600px; /* Limit grid width */
+        }
+
+        .drum-pad {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 120px; /* Square pads */
+            width: 100%; /* Take full column width */
+            border-radius: 15px; /* Rounded corners */
+            cursor: pointer;
+            user-select: none;
+            transition: all 0.1s ease-out; /* Faster transition for press effect */
+            box-shadow: 0 8px 15px rgba(0, 0, 0, 0.2); /* Soft shadow */
+            border: 2px solid transparent; /* Placeholder for active border */
+            position: relative; /* For the key label */
+        }
+
+        /* Pad specific colors and styles (more vibrant, electronic feel) */
+        .pad-kick { background: linear-gradient(135deg, #ef4444, #b91c1c); color: white; } /* Deeper Red */
+        .pad-snare { background: linear-gradient(135deg, #fbbf24, #d97706); color: white; } /* Amber */
+        .pad-hihat { background: linear-gradient(135deg, #3b82f6, #1d4ed8); color: white; } /* Deeper Blue */
+        .pad-crash { background: linear-gradient(135deg, #a855f7, #7e22ce); color: white; } /* Deeper Purple */
+        .pad-tom1 { background: linear-gradient(135deg, #10b981, #047857); color: white; } /* Deeper Emerald */
+        .pad-tom2 { background: linear-gradient(135deg, #ec4899, #be185d); color: white; } /* Deeper Pink */
+        .pad-clap { background: linear-gradient(135deg, #60a5fa, #2563eb); color: white; } /* Deeper Light Blue */
+        .pad-rim { background: linear-gradient(135deg, #f97316, #c2410c); color: white; } /* Deeper Orange */
+        .pad-shaker { background: linear-gradient(135deg, #6ee7b7, #047857); color: white; } /* Deeper Mint */
+
+
+        .drum-pad:hover {
+            transform: translateY(-3px) scale(1.02);
+            box-shadow: 0 12px 20px rgba(0, 0, 0, 0.4);
+        }
+
+        .drum-pad.active {
+            transform: translateY(0) scale(0.98);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            border: 2px solid #81e6d9; /* Teal border on active */
+            filter: brightness(1.3); /* Even brighter when active */
+        }
+
+        .pad-name {
+            font-size: 1.5rem;
+            font-weight: 700;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+            z-index: 10;
+        }
+
+        .key-label {
+            position: absolute;
+            bottom: 8px;
+            right: 8px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            opacity: 0.7;
+            text-shadow: 0 1px 1px rgba(0,0,0,0.2);
+            z-index: 10;
+        }
+
+        /* Message box styling */
+        #messageBox {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-size: 1rem;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out;
+            z-index: 1000;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        }
+
+        #messageBox.show {
+            opacity: 1;
+            visibility: visible;
+        }
+
+
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 2.5rem;
+            }
+            .instructions {
+                font-size: 1rem;
+            }
+            .drum-pads-grid {
+                grid-template-columns: repeat(2, 1fr); /* 2 columns on smaller screens */
+                gap: 15px;
+            }
+            .drum-pad {
+                height: 100px;
+                border-radius: 12px;
+            }
+            .pad-name {
+                font-size: 1.2rem;
+            }
+            .key-label {
+                font-size: 0.8rem;
+                bottom: 6px;
+                right: 6px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            h1 {
+                font-size: 2rem;
+            }
+            .instructions {
+                font-size: 0.9rem;
+                margin-bottom: 20px;
+            }
+            .drum-pads-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 10px;
+            }
+            .drum-pad {
+                height: 80px;
+                border-radius: 10px;
+            }
+            .pad-name {
+                font-size: 1rem;
+            }
+            .key-label {
+                font-size: 0.7rem;
+                bottom: 4px;
+                right: 4px;
+            }
+            .drum-kit-container {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="drum-kit-container">
+        <h1>DRUM LAB</h1>
+        <p class="instructions">Click the pads or press the corresponding keys on your keyboard to make sounds!</p>
+        <div class="drum-pads-grid">
+            <!-- Drum Pad 1: Kick -->
+            <div id="kick-pad" class="drum-pad pad-kick" data-key="1">
+                <span class="pad-name">Kick</span>
+                <span class="key-label">1</span>
+            </div>
+            <!-- Drum Pad 2: Snare -->
+            <div id="snare-pad" class="drum-pad pad-snare" data-key="2">
+                <span class="pad-name">Snare</span>
+                <span class="key-label">2</span>
+            </div>
+            <!-- Drum Pad 3: Hi-Hat -->
+            <div id="hihat-pad" class="drum-pad pad-hihat" data-key="3">
+                <span class="pad-name">Hi-Hat</span>
+                <span class="key-label">3</span>
+            </div>
+            <!-- Drum Pad 4: Crash -->
+            <div id="crash-pad" class="drum-pad pad-crash" data-key="4">
+                <span class="pad-name">Crash</span>
+                <span class="key-label">4</span>
+            </div>
+            <!-- Drum Pad 5: Tom 1 -->
+            <div id="tom1-pad" class="drum-pad pad-tom1" data-key="5">
+                <span class="pad-name">Tom 1</span>
+                <span class="key-label">5</span>
+            </div>
+            <!-- Drum Pad 6: Tom 2 -->
+            <div id="tom2-pad" class="drum-pad pad-tom2" data-key="6">
+                <span class="pad-name">Tom 2</span>
+                <span class="key-label">6</span>
+            </div>
+            <!-- Drum Pad 7: Clap -->
+            <div id="clap-pad" class="drum-pad pad-clap" data-key="7">
+                <span class="pad-name">Clap</span>
+                <span class="key-label">7</span>
+            </div>
+            <!-- Drum Pad 8: Rim Shot -->
+            <div id="rim-pad" class="drum-pad pad-rim" data-key="8">
+                <span class="pad-name">Rim Shot</span>
+                <span class="key-label">8</span>
+            </div>
+            <!-- Drum Pad 9: Shaker -->
+            <div id="shaker-pad" class="drum-pad pad-shaker" data-key="9">
+                <span class="pad-name">Shaker</span>
+                <span class="key-label">9</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom message box for alerts -->
+    <div id="messageBox" class="message-box"></div>
+
+    <script>
+        // Use Tone.start() to ensure audio context is resumed on user interaction
+        // This is important for web audio to work in all browsers
+        document.documentElement.addEventListener('mousedown', () => {
+            if (Tone.context.state !== 'running') {
+                Tone.start();
+                showMessage("Audio Context Started!", 2000);
+            }
+        });
+        document.documentElement.addEventListener('touchstart', () => {
+            if (Tone.context.state !== 'running') {
+                Tone.start();
+                showMessage("Audio Context Started!", 2000);
+            }
+        });
+
+        // --- Tone.js Drum Synthesizers (Remix Style) ---
+        // Tweaked parameters for a more electronic/processed sound
+        const kickSynth = new Tone.MembraneSynth({
+            envelope: {
+                sustain: 0.01, // Shorter sustain for punch
+                attack: 0.005,
+                decay: 0.3 // Faster decay
+            },
+            octaves: 8,
+            pitchDecay: 0.06 // Slightly more pitch bend
+        }).toDestination();
+
+        const snareSynth = new Tone.NoiseSynth({
+            noise: { type: "white" },
+            envelope: {
+                attack: 0.005,
+                decay: 0.15, // Longer, snappier decay
+                sustain: 0.02,
+                release: 0.1
+            }
+        }).chain(new Tone.Filter(3500, "bandpass"), new Tone.Freeverb({
+            roomSize: 0.3,
+            dampening: 1000
+        }), Tone.Destination); // Added reverb for a fuller snare
+
+        const hiHatSynth = new Tone.NoiseSynth({
+            noise: { type: "white" },
+            envelope: {
+                attack: 0.001,
+                decay: 0.03, // Very short decay for tight hi-hat
+                sustain: 0
+            }
+        }).chain(new Tone.Filter(9000, "highpass"), Tone.Destination); // Higher highpass for crispness
+
+        const crashSynth = new Tone.NoiseSynth({
+            noise: { type: "pink" },
+            envelope: {
+                attack: 0.02,
+                decay: 2.0, // Longer, wider crash
+                sustain: 0.1,
+                release: 3.0
+            }
+        }).chain(new Tone.Filter(4000, "highpass"), new Tone.Chorus(6, 3, 0.5), Tone.Destination); // Added chorus for ethereal shimmer
+
+        const tomSynth = new Tone.MembraneSynth({
+            pitchDecay: 0.05, // Quicker pitch decay for electronic toms
+            octaves: 5,
+            envelope: {
+                attack: 0.001,
+                decay: 0.2,
+                sustain: 0.01,
+                release: 0.3
+            }
+        }).toDestination();
+
+        const clapSynth = new Tone.NoiseSynth({
+            noise: { type: "white" },
+            envelope: {
+                attack: 0.005,
+                decay: 0.1,
+                sustain: 0.01,
+                release: 0.05
+            }
+        }).chain(new Tone.Chorus(6, 3, 0.7), new Tone.FeedbackDelay(0.1, 0.5), Tone.Destination); // More pronounced chorus and a short delay for a layered clap
+
+        const rimSynth = new Tone.PolySynth(Tone.Synth, {
+            oscillator: { type: "triangle" },
+            envelope: {
+                attack: 0.001,
+                decay: 0.08,
+                sustain: 0.01,
+                release: 0.05
+            }
+        }).chain(new Tone.Distortion(0.8), new Tone.Chebyshev(50), Tone.Destination); // Stronger distortion and Chebyshev for gritty rimshot
+
+        const shakerSynth = new Tone.NoiseSynth({
+            noise: { type: "white" },
+            envelope: {
+                attack: 0.002,
+                decay: 0.03,
+                sustain: 0,
+                release: 0.02
+            }
+        }).chain(new Tone.Filter(7000, "highpass"), Tone.Destination); // Higher filter for a crisp, digital shaker
+
+        // Map keyboard keys to specific drum sounds and their parameters
+        const drumMap = {
+            '1': { synth: kickSynth, note: 'C2', velocity: 1 },
+            '2': { synth: snareSynth, note: null, velocity: 0.8 },
+            '3': { synth: hiHatSynth, note: null, velocity: 0.7 },
+            '4': { synth: crashSynth, note: null, velocity: 0.9 },
+            '5': { synth: tomSynth, note: 'G3', velocity: 0.8 },
+            '6': { synth: tomSynth, note: 'C3', velocity: 0.8 },
+            '7': { synth: clapSynth, note: null, velocity: 0.7 },
+            '8': { synth: rimSynth, note: 'C5', velocity: 0.9 },
+            '9': { synth: shakerSynth, note: null, velocity: 0.6 }
+        };
+
+        const drumPads = document.querySelectorAll('.drum-pad');
+        const messageBox = document.getElementById('messageBox');
+        let messageTimeout;
+
+        // Function to show custom message
+        function showMessage(message, duration = 3000) {
+            messageBox.textContent = message;
+            messageBox.classList.add('show');
+            clearTimeout(messageTimeout);
+            messageTimeout = setTimeout(() => {
+                messageBox.classList.remove('show');
+            }, duration);
+        }
+
+        // Function to play sound and add visual effect
+        function playDrum(key) {
+            const padData = drumMap[key];
+            if (padData) {
+                const padElement = document.querySelector(`.drum-pad[data-key="${key}"]`);
+                if (padElement) {
+                    // Add active class for visual feedback
+                    padElement.classList.add('active');
+                    setTimeout(() => {
+                        padElement.classList.remove('active');
+                    }, 100); // Remove active class after a short delay
+
+                    // Play the sound
+                    if (padData.note) {
+                        padData.synth.triggerAttackRelease(padData.note, "8n", Tone.context.currentTime, padData.velocity);
+                    } else {
+                        // For noise synths like snare, hi-hat, crash, clap, shaker
+                        padData.synth.triggerAttackRelease("8n", Tone.context.currentTime, padData.velocity);
+                    }
+                }
+            }
+        }
+
+        // --- Event Listeners ---
+
+        // Keyboard input
+        document.addEventListener('keydown', (event) => {
+            const key = event.key;
+            let mappedKey = null;
+
+            if (key >= '1' && key <= '9') {
+                mappedKey = key; // Regular number row
+            } else if (key.startsWith('Numpad') && key.length === 7) {
+                mappedKey = key.slice(6); // Extract the number (e.g., '1' from 'Numpad1')
+            }
+
+            if (mappedKey && drumMap[mappedKey]) {
+                playDrum(mappedKey);
+                event.preventDefault(); // Prevent default browser actions
+            }
+        });
+
+        // Mouse/Touch input on drum pads
+        drumPads.forEach(pad => {
+            pad.addEventListener('mousedown', (event) => {
+                const key = pad.dataset.key;
+                playDrum(key);
+            });
+            pad.addEventListener('touchstart', (event) => {
+                event.preventDefault(); // Prevent touch delay and unwanted scroll/zoom
+                const key = pad.dataset.key;
+                playDrum(key);
+            });
+        });
+
+        // Initial message to prompt user interaction for audio
+        document.addEventListener('DOMContentLoaded', () => {
+            showMessage("Click anywhere or press a key to start audio!");
+        });
+
+    </script>
+</body>
+</html>
